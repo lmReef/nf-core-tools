@@ -1,6 +1,8 @@
 import json
 import logging
+import os
 import subprocess
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import List, Union
 
@@ -104,7 +106,10 @@ def run_prettier_on_file(file: Union[Path, str, List[str]]) -> None:
             log.debug(f"{proc.stdout.decode()}")
         except subprocess.CalledProcessError as e:
             if ": SyntaxError: " in e.stdout.decode():
-                log.critical(f"Can't format {file} because it has a syntax error.\n{e.stdout.decode()}")
+                log.critical(
+                    f"Can't format {file} because it has a syntax error.\n{
+                        e.stdout.decode()}"
+                )
             elif "files were modified by this hook" in e.stdout.decode():
                 all_lines = [line for line in e.stdout.decode().split("\n")]
                 files = "\n".join(all_lines[3:])
@@ -170,3 +175,24 @@ def ignore_file(lint_name: str, file_path: Path, dir_path: Path) -> List[List[st
         ignore_entry = []
 
     return [passed, failed, ignored, ignore_entry]
+
+
+def walk_skip_ignored(root_dir: Path) -> List[str]:
+    """Returns a list of file paths from os.walk filtered for linting."""
+    # create a list of files and dirs to skip
+    ignore_list = [".git"]
+    if Path(root_dir, ".gitignore").is_file():
+        with open(Path(root_dir, ".gitignore"), encoding="latin1") as fh:
+            for line in fh:
+                ignore_list.append(Path(line.strip().rstrip("/")).name)
+
+    # os.walk and filter the results
+    filtered_list: List[str] = []
+    for root, dirs, files in os.walk(root_dir):
+        for i_base in ignore_list:
+            ignore = str(Path(root, i_base))
+            files[:] = [file for file in files if not fnmatch(str(Path(root, file)), ignore)]
+
+        filtered_list += [str(Path(root, file)) for file in files]
+
+    return filtered_list

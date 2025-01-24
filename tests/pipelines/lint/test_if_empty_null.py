@@ -37,3 +37,28 @@ class TestLintIfEmptyNull(TestLint):
         lint_obj._load()
         result = lint_obj.pipeline_if_empty_null()
         assert len(result["warned"]) == 8
+
+    def test_git_ignore_excluded(self):
+        """Check that files included in .gitignore are ignored"""
+        txt_file = Path(self.new_pipeline) / "docs" / "test.txt"
+        with open(txt_file, "w") as f:
+            f.writelines(
+                [
+                    "ifEmpty(null)\n",
+                    "ifEmpty (null)\n",
+                    "ifEmpty( null )\n",
+                    "ifEmpty ( null )\n",
+                    ".ifEmpty(null)\n",
+                    ". ifEmpty(null)\n",
+                    "|ifEmpty(null)\n",
+                    "| ifEmpty(null)\n",
+                ]
+            )
+
+        with open(Path(self.new_pipeline) / ".gitignore", "w") as fh:
+            fh.write("docs/test.txt")
+
+        lint_obj = nf_core.pipelines.lint.PipelineLint(self.new_pipeline)
+        lint_obj._load()
+        results = lint_obj.pipeline_if_empty_null()
+        assert len(results["warned"]) == 0
