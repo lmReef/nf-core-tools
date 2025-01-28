@@ -1,7 +1,6 @@
-import fnmatch
 import logging
-import os
-from pathlib import Path
+
+from nf_core.pipelines.lint_utils import walk_skip_ignored
 
 log = logging.getLogger(__name__)
 
@@ -39,34 +38,23 @@ def pipeline_todos(self, root_dir=None):
     if root_dir is None:
         root_dir = self.wf_path
 
-    ignore = [".git"]
-    if Path(root_dir, ".gitignore").is_file():
-        with open(Path(root_dir, ".gitignore"), encoding="latin1") as fh:
-            for line in fh:
-                ignore.append(Path(line.strip().rstrip("/")).name)
-    for root, dirs, files in os.walk(root_dir, topdown=True):
-        # Ignore files
-        for i_base in ignore:
-            i = str(Path(root, i_base))
-            dirs[:] = [d for d in dirs if not fnmatch.fnmatch(str(Path(root, d)), i)]
-            files[:] = [f for f in files if not fnmatch.fnmatch(str(Path(root, f)), i)]
-        for fname in files:
-            try:
-                with open(Path(root, fname), encoding="latin1") as fh:
-                    for line in fh:
-                        if "TODO nf-core" in line:
-                            line = (
-                                line.replace("<!--", "")
-                                .replace("-->", "")
-                                .replace("# TODO nf-core: ", "")
-                                .replace("// TODO nf-core: ", "")
-                                .replace("TODO nf-core: ", "")
-                                .strip()
-                            )
-                            warned.append(f"TODO string in `{fname}`: _{line}_")
-                            file_paths.append(Path(root, fname))
-            except FileNotFoundError:
-                log.debug(f"Could not open file {fname} in pipeline_todos lint test")
+    for file_path in walk_skip_ignored(root_dir):
+        try:
+            with open(file_path, encoding="latin1") as fh:
+                for line in fh:
+                    if "TODO nf-core" in line:
+                        line = (
+                            line.replace("<!--", "")
+                            .replace("-->", "")
+                            .replace("# TODO nf-core: ", "")
+                            .replace("// TODO nf-core: ", "")
+                            .replace("TODO nf-core: ", "")
+                            .strip()
+                        )
+                        warned.append(f"TODO string in `{file_path}`: _{line}_")
+                        file_paths.append(file_path)
+        except FileNotFoundError:
+            log.debug(f"Could not open file {file_path} in pipeline_todos lint test")
 
     if len(warned) == 0:
         passed.append("No TODO strings found")
